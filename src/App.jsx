@@ -75,8 +75,8 @@ const productToDb = (p) => ({ name: p.name, cut: p.cut, cat: p.cat, unit: p.unit
 const dbToCustomer = (r) => ({ id: r.id, name: r.name, phone: r.phone, birthday: r.birthday, address: r.address, cep: r.cep, clubMember: r.club_member, cashbackBalance: Number(r.cashback_balance || 0), orders: [] });
 const customerToDb = (c) => ({ name: c.name, phone: c.phone, birthday: c.birthday || null, address: c.address, cep: c.cep, club_member: c.clubMember, cashback_balance: c.cashbackBalance });
 
-const dbToOrder = (r) => ({ id: r.id, customerId: r.customer_id, date: r.created_at, items: r.items, subtotal: Number(r.subtotal), cashbackUsed: Number(r.cashback_used || 0), cashbackEarned: Number(r.cashback_earned || 0), total: Number(r.total), mode: r.mode, address: r.address, deliveryStatus: r.delivery_status, km: r.km, deliveryFee: r.delivery_fee });
-const orderToDb = (o, customerId) => ({ customer_id: customerId, items: o.items, subtotal: o.subtotal, cashback_used: o.cashbackUsed, cashback_earned: o.cashbackEarned, total: o.total, mode: o.mode, address: o.address, delivery_status: o.deliveryStatus, km: o.km, delivery_fee: o.deliveryFee });
+const dbToOrder = (r) => ({ id: r.id, customerId: r.customer_id, date: r.created_at, items: r.items, subtotal: Number(r.subtotal), cashbackUsed: Number(r.cashback_used || 0), cashbackEarned: Number(r.cashback_earned || 0), total: Number(r.total), mode: r.mode, address: r.address, deliveryStatus: r.delivery_status, km: r.km, deliveryFee: r.delivery_fee, status: r.status || "pendente" });
+const orderToDb = (o, customerId) => ({ customer_id: customerId, items: o.items, subtotal: o.subtotal, cashback_used: o.cashbackUsed, cashback_earned: o.cashbackEarned, total: o.total, mode: o.mode, address: o.address, delivery_status: o.deliveryStatus, km: o.km, delivery_fee: o.deliveryFee, status: o.status });
 
 const dbToSettings = (r) => ({ cashbackPercent: Number(r.cashback_percent), deliveryBase: { address: r.delivery_base_address, cep: r.delivery_base_cep }, deliveryTiers: r.delivery_tiers });
 const settingsToDb = (s) => ({ cashback_percent: s.cashbackPercent, delivery_base_address: s.deliveryBase.address, delivery_base_cep: s.deliveryBase.cep, delivery_tiers: s.deliveryTiers });
@@ -242,6 +242,7 @@ const SEED_CUSTOMERS = [
         deliveryStatus: null,
         km: null,
         deliveryFee: null,
+        status: "concluido",
       },
     ],
   },
@@ -879,6 +880,7 @@ function Storefront({ products, categories, customers, settings, onOrderFinalize
                 mode: delivery.mode,
                 address: delivery.mode === "entrega" ? delivery.address : null,
                 deliveryStatus: delivery.mode === "entrega" ? "pendente" : null,
+                status: "pendente",
                 km: null,
                 deliveryFee: null,
               },
@@ -1577,6 +1579,7 @@ function Retaguarda({
   const [campaignEvent, setCampaignEvent] = useState(null);
   const [routeSelection, setRouteSelection] = useState([]);
   const [reportRange, setReportRange] = useState("30d");
+  const [ordersFilter, setOrdersFilter] = useState("todos");
   const [tiersDraft, setTiersDraft] = useState(settings.deliveryTiers);
   const [baseAddressDraft, setBaseAddressDraft] = useState(settings.deliveryBase.address);
   const [importSummary, setImportSummary] = useState(null);
@@ -1841,6 +1844,12 @@ function Retaguarda({
               Produtos
             </button>
             <button
+              onClick={() => setRaTab("pedidos")}
+              style={{ background: raTab === "pedidos" ? "rgba(72,168,174,0.15)" : "transparent", border: `1px solid ${raTab === "pedidos" ? T.teal : "rgba(218,200,155,0.15)"}`, color: raTab === "pedidos" ? T.cream : T.muted, borderRadius: 999, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >
+              Pedidos
+            </button>
+            <button
               onClick={() => setRaTab("relatorios")}
               style={{ background: raTab === "relatorios" ? "rgba(72,168,174,0.15)" : "transparent", border: `1px solid ${raTab === "relatorios" ? T.teal : "rgba(218,200,155,0.15)"}`, color: raTab === "relatorios" ? T.cream : T.muted, borderRadius: 999, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
             >
@@ -1931,6 +1940,75 @@ function Retaguarda({
           </div>
         )}
         </>
+        ) : raTab === "pedidos" ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h1 style={{ fontFamily: "'Amarante', serif", fontSize: 26, color: T.cream, margin: 0 }}>Pedidos</h1>
+                <div style={{ color: T.muted, fontSize: 12.5, marginTop: 4 }}>{allOrders.length} pedido{allOrders.length === 1 ? "" : "s"} no total</div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
+              {[{ id: "todos", label: "Todos" }, { id: "pendente", label: "Pendentes" }, { id: "concluido", label: "Concluídos" }].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setOrdersFilter(f.id)}
+                  style={{ background: ordersFilter === f.id ? T.terracottaSoft : "transparent", border: `1px solid ${ordersFilter === f.id ? T.terracotta : "rgba(218,200,155,0.15)"}`, color: T.cream, borderRadius: 999, padding: "7px 13px", fontFamily: "'Open Sans', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              const sorted = [...allOrders].sort((a, b) => new Date(b.date) - new Date(a.date));
+              const list = ordersFilter === "todos" ? sorted : sorted.filter((o) => (o.status || "pendente") === ordersFilter);
+              if (list.length === 0) {
+                return <div style={{ color: T.muted, fontSize: 13, padding: "40px 0", textAlign: "center" }}>Nenhum pedido por aqui.</div>;
+              }
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {list.map((o) => {
+                    const concluded = (o.status || "pendente") === "concluido";
+                    return (
+                      <div key={o.id} style={{ background: T.surface, borderRadius: 12, padding: 14, border: "1px solid rgba(218,200,155,0.08)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <div style={{ color: T.cream, fontFamily: "'Open Sans', sans-serif", fontWeight: 700, fontSize: 14 }}>{o.customerName}</div>
+                              <span style={{ fontFamily: "'Open Sans', sans-serif", fontSize: 9.5, fontWeight: 700, color: o.mode === "entrega" ? T.blue : T.teal, border: `1px solid ${o.mode === "entrega" ? T.blue : T.teal}`, borderRadius: 999, padding: "1px 7px" }}>
+                                {o.mode === "entrega" ? "ENTREGA" : "RETIRADA"}
+                              </span>
+                              <span style={{ fontFamily: "'Open Sans', sans-serif", fontSize: 9.5, fontWeight: 700, color: concluded ? T.teal : T.gold, border: `1px dashed ${concluded ? T.teal : T.gold}`, borderRadius: 999, padding: "1px 7px" }}>
+                                {concluded ? "CONCLUÍDO" : "PENDENTE"}
+                              </span>
+                            </div>
+                            <div style={{ color: T.muted, fontFamily: "'Open Sans', sans-serif", fontSize: 11.5, marginTop: 3 }}>
+                              {new Date(o.date).toLocaleString("pt-BR")}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ color: T.gold, fontFamily: "'Open Sans', sans-serif", fontWeight: 700, fontSize: 15 }}>{fmt(o.total)}</div>
+                          </div>
+                        </div>
+                        <div style={{ color: T.muted, fontFamily: "'Open Sans', sans-serif", fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
+                          {(o.items || []).map((it) => (it.unit === "kg" ? `${fmtKg(it.qty)} ${it.name}` : `${it.qty}x ${it.name}`)).join(", ")}
+                          {o.mode === "entrega" && o.address ? ` · ${o.address}` : ""}
+                        </div>
+                        <button
+                          onClick={() => onUpdateOrder(o.id, { status: concluded ? "pendente" : "concluido" })}
+                          style={{ background: concluded ? "none" : T.terracotta, color: concluded ? T.muted : T.cream, border: concluded ? "1px solid rgba(218,200,155,0.2)" : "none", borderRadius: 8, padding: "7px 14px", fontFamily: "'Open Sans', sans-serif", fontWeight: 700, fontSize: 11.5, cursor: "pointer" }}
+                        >
+                          {concluded ? "Reabrir" : "Marcar concluído"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </>
         ) : raTab === "relatorios" ? (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
@@ -2186,7 +2264,7 @@ function Retaguarda({
                           <span style={{ color: fee ? T.teal : T.muted, fontFamily: "'Open Sans', sans-serif", fontSize: 12.5, fontWeight: 700 }}>{fee != null ? fmt(fee) : "a combinar"}</span>
                         </div>
                         <button
-                          onClick={() => updateDeliveryOrder(d.customerId, d.id, { deliveryStatus: "entregue", km: parseFloat(kmValue.replace(",", ".")) || d.km, deliveryFee: fee })}
+                          onClick={() => updateDeliveryOrder(d.customerId, d.id, { deliveryStatus: "entregue", status: "concluido", km: parseFloat(kmValue.replace(",", ".")) || d.km, deliveryFee: fee })}
                           style={{ marginLeft: "auto", background: T.terracotta, color: T.cream, border: "none", borderRadius: 8, padding: "7px 14px", fontFamily: "'Open Sans', sans-serif", fontWeight: 700, fontSize: 11.5, cursor: "pointer" }}
                         >
                           Marcar entregue
