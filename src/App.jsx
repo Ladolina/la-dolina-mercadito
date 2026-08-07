@@ -6,7 +6,7 @@ const T = {
   void: "#191716",
   surface: "#232019",
   cream: "#DAC89B",
-  gold: "#A9821F",
+  gold: gold: "#9C7A28",
   terracotta: "#C1581E",
   terracottaSoft: "rgba(193,88,30,0.14)",
   blue: "#21458F",
